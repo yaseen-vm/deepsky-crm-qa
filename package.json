@@ -1,0 +1,16 @@
+{
+  "name": "deepsky-crm-adversarial-qa",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:admin": "playwright test tests/crm.spec.ts --grep @admin",
+    "test:fieldstaff": "playwright test tests/crm.spec.ts --grep @fieldstaff",
+    "report": "playwright show-report"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "dotenv": "^16.4.7"
+  }
+}
