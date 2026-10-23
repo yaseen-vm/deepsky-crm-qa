@@ -1,0 +1,58 @@
+name: Deepsky CRM Adversarial QA
+
+on:
+  workflow_dispatch:
+  # Enable this only after validating staging selectors and credentials:
+  # schedule:
+  #   - cron: "0 2 * * 1-5"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deepsky-staging-qa
+  cancel-in-progress: false
+
+jobs:
+  playwright:
+    name: Playwright staging checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      BASE_URL: https://deepsky-crm-staging.xenora.workers.dev/
+      ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+      ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+      FIELDSTAFF_EMAIL: ${{ secrets.FIELDSTAFF_EMAIL }}
+      FIELDSTAFF_PASSWORD: ${{ secrets.FIELDSTAFF_PASSWORD }}
+      ADMIN_PATHS: ${{ vars.ADMIN_PATHS }}
+      FIELDSTAFF_PATHS: ${{ vars.FIELDSTAFF_PATHS }}
+
+    steps:
+      - name: Checkout test suite
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install Playwright Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Run QA tests
+        run: npm test
+
+      - name: Upload Playwright report and evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: deepsky-crm-qa-${{ github.run_number }}
+          path: |
+            playwright-report/
+            test-results/
+            artifacts/
+          if-no-files-found: warn
+          retention-days: 14
