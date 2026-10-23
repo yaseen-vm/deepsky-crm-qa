@@ -48,6 +48,11 @@ async function login(page: Page, email: string, password: string) {
   await controls.email.fill(email);
   await controls.password.fill(password);
   await controls.submit.click();
+
+  // The app changes the submit button to a disabled "Signing in…" state while
+  // the auth request is pending. Wait for that state to finish before asserting
+  // whether the session was established; do not sample the UI immediately.
+  await expect(controls.submit, "sign-in request did not finish; check the auth API/network").toBeEnabled({ timeout: 20_000 });
   await page.waitForLoadState("domcontentloaded").catch(() => undefined);
 }
 
@@ -107,28 +112,34 @@ test.describe("staging smoke and resilience", () => {
     expect(stillOnLogin || hasRejectionSignal, "invalid login produced no visible rejection signal").toBeTruthy();
   });
 
-  test("admin staging login reaches an authenticated-looking page", async ({ page }) => {
-    test.skip(!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD, "Add ADMIN_EMAIL and ADMIN_PASSWORD repository secrets.");
-    const errors: string[] = [];
-    page.on("pageerror", error => errors.push(error.message));
-    await login(page, process.env.ADMIN_EMAIL!, process.env.ADMIN_PASSWORD!);
-    await expect(visibleAppError(page)).toHaveCount(0);
-    await expect(page.locator("body")).not.toBeEmpty();
-    expect(errors, "admin login triggered uncaught browser errors").toEqual([]);
-    const loginFormStillVisible = await page.locator('input[type="password"]').isVisible().catch(() => false);
-    expect(loginFormStillVisible, "password field remains visible; login may not have succeeded").toBeFalsy();
-  });
+  // Credential tests deliberately disable screenshots, video, and tracing:
+  // Playwright DOM snapshots can otherwise record the entered login values.
+  test.describe("credential flows", () => {
+    test.use({ trace: "off", screenshot: "off", video: "off" });
 
-  test("field-staff staging login reaches an authenticated-looking page", async ({ page }) => {
-    test.skip(!process.env.FIELDSTAFF_EMAIL || !process.env.FIELDSTAFF_PASSWORD, "Add FIELDSTAFF_EMAIL and FIELDSTAFF_PASSWORD repository secrets.");
-    const errors: string[] = [];
-    page.on("pageerror", error => errors.push(error.message));
-    await login(page, process.env.FIELDSTAFF_EMAIL!, process.env.FIELDSTAFF_PASSWORD!);
-    await expect(visibleAppError(page)).toHaveCount(0);
-    await expect(page.locator("body")).not.toBeEmpty();
-    expect(errors, "field-staff login triggered uncaught browser errors").toEqual([]);
-    const loginFormStillVisible = await page.locator('input[type="password"]').isVisible().catch(() => false);
-    expect(loginFormStillVisible, "password field remains visible; login may not have succeeded").toBeFalsy();
+    test("admin staging login reaches an authenticated page", async ({ page }) => {
+      test.skip(!process.env.ADMIN_EMAIL || !process.env.ADMIN_PASSWORD, "Add ADMIN_EMAIL and ADMIN_PASSWORD repository secrets.");
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await login(page, process.env.ADMIN_EMAIL!, process.env.ADMIN_PASSWORD!);
+      await expect(visibleAppError(page)).toHaveCount(0);
+      await expect(page.locator("body")).not.toBeEmpty();
+      expect(errors, "admin login triggered uncaught browser errors").toEqual([]);
+      const loginFormStillVisible = await page.locator('input[type="password"]').isVisible().catch(() => false);
+      expect(loginFormStillVisible, "login form remains after sign-in finished; check credentials or auth response").toBeFalsy();
+    });
+
+    test("field-staff staging login reaches an authenticated page", async ({ page }) => {
+      test.skip(!process.env.FIELDSTAFF_EMAIL || !process.env.FIELDSTAFF_PASSWORD, "Add FIELDSTAFF_EMAIL and FIELDSTAFF_PASSWORD repository secrets.");
+      const errors: string[] = [];
+      page.on("pageerror", error => errors.push(error.message));
+      await login(page, process.env.FIELDSTAFF_EMAIL!, process.env.FIELDSTAFF_PASSWORD!);
+      await expect(visibleAppError(page)).toHaveCount(0);
+      await expect(page.locator("body")).not.toBeEmpty();
+      expect(errors, "field-staff login triggered uncaught browser errors").toEqual([]);
+      const loginFormStillVisible = await page.locator('input[type="password"]').isVisible().catch(() => false);
+      expect(loginFormStillVisible, "login form remains after sign-in finished; check credentials or auth response").toBeFalsy();
+    });
   });
 
   test("visible search input safely handles empty, wildcard-heavy, and unusual text", async ({ page }) => {
